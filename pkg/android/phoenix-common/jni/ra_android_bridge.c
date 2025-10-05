@@ -1,5 +1,3 @@
-// ra_android_bridge.c
-// If compiled as C++ file, wrap with extern "C"
 #include <jni.h>
 #include <libretro.h>
 #include "runloop.h"
