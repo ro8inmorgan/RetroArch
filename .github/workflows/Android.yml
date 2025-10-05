@@ -23,7 +23,7 @@ jobs:
     - name: Compile RA
       run: |
         cd pkg/android/phoenix
-        ./gradlew assembleAarch64Release
+        ./gradlew assembleRelease
         find . -iname "*.apk" -exec ls -l "{}" \;
 
     - name: Get short SHA
@@ -34,4 +34,6 @@ jobs:
       with:
         name: retroarch-android-${{ steps.slug.outputs.sha8 }}
         path: |
+          pkg/android/phoenix/build/outputs/apk/aarch64/release/phoenix-normal-release.apk
           pkg/android/phoenix/build/outputs/apk/aarch64/release/phoenix-aarch64-release.apk
+          pkg/android/phoenix/build/outputs/apk/aarch64/release/phoenix-ra32-release.apk
