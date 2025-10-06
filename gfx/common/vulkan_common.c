@@ -2286,7 +2286,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    }
 
    old_swapchain     = vk->swapchain;
-   info.oldSwapchain = old_swapchain; /* !important can cause crash on some devices if destroyed before creating new is created! keep it alive until after creation */
+   info.oldSwapchain = old_swapchain; /* important can cause crash on some devices if destroyed before creating new is created! keep it alive until after creation */
 
    /* Create the new swapchain. */
    {
