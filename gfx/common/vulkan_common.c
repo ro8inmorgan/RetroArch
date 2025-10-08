@@ -2213,7 +2213,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       vk->swapchain                    = VK_NULL_HANDLE;
       vk->context.swapchain_width      = width;
       vk->context.swapchain_height     = height;
-      vk->context.num_swapchain_images = 0;
+      vk->context.num_swapchain_images = 1;
 
       memset(vk->context.swapchain_images, 0, sizeof(vk->context.swapchain_images));
       RARCH_DBG("[Vulkan] Cannot create a swapchain yet. Will try again later...\n");
@@ -2262,10 +2262,25 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    info.imageExtent.width      = swapchain_size.width;
    info.imageExtent.height     = swapchain_size.height;
    info.imageArrayLayers       = 1;
-   info.imageUsage             =  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                                | VK_IMAGE_USAGE_SAMPLED_BIT;
+   /* Validate usage bits against supportedUsageFlags, but keep essential bit. */
+   {
+      VkImageUsageFlags desired_usage =
+           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+         | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+         | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+         | VK_IMAGE_USAGE_SAMPLED_BIT;
+      VkImageUsageFlags supported   = surface_properties.supportedUsageFlags;
+      VkImageUsageFlags final_usage = desired_usage & supported;
+
+      if (!(supported & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT))
+      {
+         RARCH_ERR("[Vulkan] Surface does not support COLOR_ATTACHMENT usage.\n");
+         return false;
+      }
+
+      final_usage                  |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+      info.imageUsage               = final_usage;
+   }
    info.imageSharingMode       = VK_SHARING_MODE_EXCLUSIVE;
    info.queueFamilyIndexCount  = 0;
    info.pQueueFamilyIndices    = NULL;
