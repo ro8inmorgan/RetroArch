@@ -2107,23 +2107,10 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       }
    }
 
-   {
-      VkResult r;
-      r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
-            vk->vk_surface, &format_count, NULL);
-      if (r != VK_SUCCESS || format_count == 0)
-      {
-         RARCH_ERR("[Vulkan] Surface has no formats (r=%d, count=%u).\n", r, format_count);
-         return false;
-      }
-      r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
-            vk->vk_surface, &format_count, formats);
-      if (r != VK_SUCCESS)
-      {
-         RARCH_ERR("[Vulkan] Failed to get surface formats: %d\n", r);
-         return false;
-      }
-   }
+   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
+         vk->vk_surface, &format_count, NULL);
+   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
+         vk->vk_surface, &format_count, formats);
 
    format.format = VK_FORMAT_UNDEFINED;
    if (     format_count == 1
@@ -2229,6 +2216,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       vk->context.num_swapchain_images = 1;
 
       memset(vk->context.swapchain_images, 0, sizeof(vk->context.swapchain_images));
+      vk->context.flags &= ~VK_CTX_FLAG_HAS_ACQUIRED_SWAPCHAIN;
       RARCH_DBG("[Vulkan] Cannot create a swapchain yet. Will try again later...\n");
       return true;
    }
@@ -2350,6 +2338,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    if (vk->flags & VK_DATA_FLAG_EMULATING_MAILBOX)
       vulkan_emulated_mailbox_init(&vk->mailbox, vk->context.device, vk->swapchain);
 
+   vk->flags &= ~VK_DATA_FLAG_CREATED_NEW_SWAPCHAIN;
    return true;
 }
 
