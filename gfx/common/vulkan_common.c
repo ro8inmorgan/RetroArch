@@ -2262,25 +2262,10 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    info.imageExtent.width      = swapchain_size.width;
    info.imageExtent.height     = swapchain_size.height;
    info.imageArrayLayers       = 1;
-   /* Validate usage bits against supportedUsageFlags, but keep essential bit. */
-   {
-      VkImageUsageFlags desired_usage =
-           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-         | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-         | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-         | VK_IMAGE_USAGE_SAMPLED_BIT;
-      VkImageUsageFlags supported   = surface_properties.supportedUsageFlags;
-      VkImageUsageFlags final_usage = desired_usage & supported;
-
-      if (!(supported & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT))
-      {
-         RARCH_ERR("[Vulkan] Surface does not support COLOR_ATTACHMENT usage.\n");
-         return false;
-      }
-
-      final_usage                  |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-      info.imageUsage               = final_usage;
-   }
+   info.imageUsage             =  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                | VK_IMAGE_USAGE_SAMPLED_BIT;
    info.imageSharingMode       = VK_SHARING_MODE_EXCLUSIVE;
    info.queueFamilyIndexCount  = 0;
    info.pQueueFamilyIndices    = NULL;
@@ -2288,11 +2273,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    info.compositeAlpha         = composite;
    info.presentMode            = swapchain_present_mode;
    info.clipped                = VK_TRUE;
-   info.oldSwapchain           = old_swapchain;
-
-   info.oldSwapchain = VK_NULL_HANDLE;
-   if (old_swapchain != VK_NULL_HANDLE)
-      vkDestroySwapchainKHR(vk->context.device, old_swapchain, NULL);
+   info.oldSwapchain = old_swapchain;
 
    if (vkCreateSwapchainKHR(vk->context.device,
             &info, NULL, &vk->swapchain) != VK_SUCCESS)
@@ -2300,7 +2281,10 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       RARCH_ERR("[Vulkan] Failed to create swapchain.\n");
       return false;
    }
-
+   /* Now safe to destroy the old one. */
+   if (old_swapchain != VK_NULL_HANDLE)
+      vkDestroySwapchainKHR(vk->context.device, old_swapchain, NULL);
+      
    vk->context.swapchain_width        = swapchain_size.width;
    vk->context.swapchain_height       = swapchain_size.height;
 #ifdef VULKAN_HDR_SWAPCHAIN
