@@ -2336,7 +2336,8 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
 
    if (vk->flags & VK_DATA_FLAG_EMULATING_MAILBOX)
       vulkan_emulated_mailbox_init(&vk->mailbox, vk->context.device, vk->swapchain);
-
+      
+   vk->flags &= ~VK_DATA_FLAG_CREATED_NEW_SWAPCHAIN;
    return true;
 }
 
