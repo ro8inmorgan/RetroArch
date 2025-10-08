@@ -1952,7 +1952,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    if (   !surface_properties.currentExtent.width
        && !surface_properties.currentExtent.height)
    {
-      /* Minimal-change: tear down existing swapchain and report handled. */
+      /* tear down existing swapchain and report handled. */
       if (vk->swapchain != VK_NULL_HANDLE)
          vkDestroySwapchainKHR(vk->context.device, vk->swapchain, NULL);
       vk->swapchain                    = VK_NULL_HANDLE;
@@ -2046,14 +2046,13 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
 
    vk->context.swap_interval = swap_interval;
 
-   /* Minimal-change: copy only what fits in context array. */
+   /* copy only what fits in context array. */
    {
       uint32_t copy_count = present_mode_count;
       if (copy_count > ctx_present_modes_cap)
          copy_count = ctx_present_modes_cap;
       for (i = 0; i < copy_count; i++)
          vk->context.present_modes[i] = present_modes[i];
-      /* optional zeroing of any tail omitted to keep changes minimal */
    }
 
    /* Prefer IMMEDIATE without vsync */
@@ -2286,7 +2285,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    info.imageExtent.height     = swapchain_size.height;
    info.imageArrayLayers       = 1;
 
-   /* Minimal change: validate usage bits against supportedUsageFlags, but keep essential bit. */
+   /* Validate usage bits against supportedUsageFlags, but keep essential bit. */
    info.imageUsage             =  (  (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
                                     | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
                                     | VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -2357,7 +2356,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
          break;
    }
 
-   /* Minimal-change: get image count first, clamp to capacity, then fetch. */
+   /* Get image count first, clamp to capacity, then fetch. */
    {
       uint32_t count = 0;
       vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain, &count, NULL);
