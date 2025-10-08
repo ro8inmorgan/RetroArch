@@ -2025,17 +2025,36 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
 
    vulkan_emulated_mailbox_deinit(&vk->mailbox);
 
-   vkGetPhysicalDeviceSurfacePresentModesKHR(
-         vk->context.gpu, vk->vk_surface,
-         &present_mode_count, NULL);
-   if (present_mode_count < 1 || present_mode_count > 16)
+   /* Present modes (bounded). */
    {
-      RARCH_ERR("[Vulkan] Bogus present modes found.\n");
-      return false;
+      VkResult r = vkGetPhysicalDeviceSurfacePresentModesKHR(
+                     vk->context.gpu, vk->vk_surface, &present_mode_count, NULL);
+      if (r != VK_SUCCESS || present_mode_count == 0)
+      {
+         RARCH_ERR("[Vulkan] Failed to query present modes: %d\n", r);
+         return false;
+      }
+      if (present_mode_count > (uint32_t)(sizeof(present_modes)/sizeof(present_modes[0])))
+         present_mode_count = (uint32_t)(sizeof(present_modes)/sizeof(present_modes[0]));
+
+      r = vkGetPhysicalDeviceSurfacePresentModesKHR(
+            vk->context.gpu, vk->vk_surface, &present_mode_count, present_modes);
+      if (r != VK_SUCCESS)
+      {
+         RARCH_ERR("[Vulkan] Failed to get present modes: %d\n", r);
+         return false;
+      }
+
+      /* Save a bounded copy to context. */
+      uint32_t copy_count = present_mode_count;
+      if (copy_count > ctx_present_modes_cap) copy_count = ctx_present_modes_cap;
+      for (i = 0; i < copy_count; i++)
+         vk->context.present_modes[i] = present_modes[i];
+      /* If context array is larger, zero remaining (optional). */
+      if (ctx_present_modes_cap > copy_count)
+         memset(&vk->context.present_modes[copy_count], 0,
+                (ctx_present_modes_cap - copy_count) * sizeof(vk->context.present_modes[0]));
    }
-   vkGetPhysicalDeviceSurfacePresentModesKHR(
-         vk->context.gpu, vk->vk_surface,
-         &present_mode_count, present_modes);
 
    vk->context.swap_interval = swap_interval;
 
