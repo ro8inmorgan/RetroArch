@@ -2275,9 +2275,12 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    info.clipped                = VK_TRUE;
    info.oldSwapchain           = old_swapchain;
 
+   /* Only destroy old swapchain before creation on non-Android. */
+#ifndef ANDROID
    info.oldSwapchain = VK_NULL_HANDLE;
    if (old_swapchain != VK_NULL_HANDLE)
       vkDestroySwapchainKHR(vk->context.device, old_swapchain, NULL);
+#endif
 
    if (vkCreateSwapchainKHR(vk->context.device,
             &info, NULL, &vk->swapchain) != VK_SUCCESS)
@@ -2285,6 +2288,12 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       RARCH_ERR("[Vulkan] Failed to create swapchain.\n");
       return false;
    }
+
+   /* On Android, now that creation succeeded, destroy the old swapchain. */
+#ifdef ANDROID
+   if (old_swapchain != VK_NULL_HANDLE)
+      vkDestroySwapchainKHR(vk->context.device, old_swapchain, NULL);
+#endif
 
    vk->context.swapchain_width        = swapchain_size.width;
    vk->context.swapchain_height       = swapchain_size.height;
