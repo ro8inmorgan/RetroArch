@@ -1939,6 +1939,17 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    vkDeviceWaitIdle(vk->context.device);
    vulkan_acquire_clear_fences(vk);
 
+      /* Query surface capabilities. */
+   {
+      VkResult r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk->context.gpu,
+                        vk->vk_surface, &surface_properties);
+      if (r != VK_SUCCESS)
+      {
+         RARCH_ERR("[Vulkan] Failed to query surface capabilities: %d\n", r);
+         return false;
+      }
+   }
+
    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk->context.gpu,
          vk->vk_surface, &surface_properties);
 
