@@ -2028,14 +2028,8 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
 
    vk->context.swap_interval = swap_interval;
 
-   /* copy only what fits in context array. */
-   {
-      uint32_t copy_count = present_mode_count;
-      if (copy_count > ctx_present_modes_cap)
-         copy_count = ctx_present_modes_cap;
-      for (i = 0; i < copy_count; i++)
-         vk->context.present_modes[i] = present_modes[i];
-   }
+   for (i = 0; i < present_mode_count; i++)
+      vk->context.present_modes[i] = present_modes[i];
 
    /* Prefer IMMEDIATE without vsync */
    for (i = 0; i < present_mode_count; i++)
@@ -2219,7 +2213,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       vk->swapchain                    = VK_NULL_HANDLE;
       vk->context.swapchain_width      = width;
       vk->context.swapchain_height     = height;
-      vk->context.num_swapchain_images = 1;
+      vk->context.num_swapchain_images = 0;
 
       memset(vk->context.swapchain_images, 0, sizeof(vk->context.swapchain_images));
       RARCH_DBG("[Vulkan] Cannot create a swapchain yet. Will try again later...\n");
