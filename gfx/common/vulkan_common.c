@@ -2074,17 +2074,20 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    }
 
    /* If still in FIFO with no swap interval, try MAILBOX */
-   for (i = 0; i < present_mode_count; i++)
+   if (!swap_interval && swapchain_present_mode == VK_PRESENT_MODE_FIFO_KHR)
    {
-      if (     !swap_interval
-            && swapchain_present_mode == VK_PRESENT_MODE_FIFO_KHR
-            && present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+   for (i = 0; i < present_mode_count; i++)
       {
-         swapchain_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-         break;
+         if (     !swap_interval
+               && swapchain_present_mode == VK_PRESENT_MODE_FIFO_KHR
+               && present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+         {
+            swapchain_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+            break;
+         }
       }
    }
-
+  
    /* Present mode logging */
    if (vk->swapchain == VK_NULL_HANDLE)
    {
@@ -2130,10 +2133,25 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       }
    }
 
-   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
-         vk->vk_surface, &format_count, NULL);
-   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
-         vk->vk_surface, &format_count, formats);
+   /* Surface formats (bounded). */
+   {
+      VkResult r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu, vk->vk_surface,
+                     &format_count, NULL);
+      if (r != VK_SUCCESS || format_count == 0)
+      {
+         RARCH_ERR("[Vulkan] Failed to query surface formats: %d\n", r);
+         return false;
+      }
+      if (format_count > (uint32_t)(sizeof(formats)/sizeof(formats[0])))
+         format_count = (uint32_t)(sizeof(formats)/sizeof(formats[0]));
+      r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu, vk->vk_surface,
+                     &format_count, formats);
+      if (r != VK_SUCCESS)
+      {
+         RARCH_ERR("[Vulkan] Failed to get surface formats: %d\n", r);
+         return false;
+      }
+   }
 
    format.format = VK_FORMAT_UNDEFINED;
    if (     format_count == 1
