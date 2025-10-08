@@ -1933,6 +1933,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    bool vsync                              = settings->bools.video_vsync;
    bool adaptive_vsync                     = settings->bools.video_adaptive_vsync;
 
+   /* Bounds for safe copies into context arrays (minimal change). */
    const uint32_t ctx_present_modes_cap =
       (uint32_t)(sizeof(vk->context.present_modes) / sizeof(vk->context.present_modes[0]));
    const uint32_t ctx_swap_images_cap =
@@ -1950,7 +1951,19 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    /* Skip creation when window is minimized */
    if (   !surface_properties.currentExtent.width
        && !surface_properties.currentExtent.height)
-      return false;
+   {
+      /* Minimal-change: tear down existing swapchain and report handled. */
+      if (vk->swapchain != VK_NULL_HANDLE)
+         vkDestroySwapchainKHR(vk->context.device, vk->swapchain, NULL);
+      vk->swapchain                    = VK_NULL_HANDLE;
+      vk->context.swapchain_width      = width;
+      vk->context.swapchain_height     = height;
+      vk->context.num_swapchain_images = 0;
+      memset(vk->context.swapchain_images, 0, sizeof(vk->context.swapchain_images));
+      vk->context.flags               &= ~VK_CTX_FLAG_HAS_ACQUIRED_SWAPCHAIN;
+      RARCH_DBG("[Vulkan] Window minimized; postponed swapchain creation.\n");
+      return true;
+   }
 
    if (     (swap_interval == 0)
          && (vk->flags & VK_DATA_FLAG_EMULATE_MAILBOX)
@@ -2018,41 +2031,30 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    }
 
    vulkan_emulated_mailbox_deinit(&vk->mailbox);
-   /* Present modes (bounded). */
+
+   vkGetPhysicalDeviceSurfacePresentModesKHR(
+         vk->context.gpu, vk->vk_surface,
+         &present_mode_count, NULL);
+   if (present_mode_count < 1 || present_mode_count > 16)
    {
-      VkResult r = vkGetPhysicalDeviceSurfacePresentModesKHR(
-                     vk->context.gpu, vk->vk_surface, &present_mode_count, NULL);
-      if (r != VK_SUCCESS || present_mode_count == 0)
-      {
-         RARCH_ERR("[Vulkan] Failed to query present modes: %d\n", r);
-         return false;
-      }
-      if (present_mode_count > (uint32_t)(sizeof(present_modes)/sizeof(present_modes[0])))
-         present_mode_count = (uint32_t)(sizeof(present_modes)/sizeof(present_modes[0]));
-
-      r = vkGetPhysicalDeviceSurfacePresentModesKHR(
-            vk->context.gpu, vk->vk_surface, &present_mode_count, present_modes);
-      if (r != VK_SUCCESS)
-      {
-         RARCH_ERR("[Vulkan] Failed to get present modes: %d\n", r);
-         return false;
-      }
-
-      /* Save a bounded copy to context. */
-      uint32_t copy_count = present_mode_count;
-      if (copy_count > ctx_present_modes_cap) copy_count = ctx_present_modes_cap;
-      for (i = 0; i < copy_count; i++)
-         vk->context.present_modes[i] = present_modes[i];
-      /* If context array is larger, zero remaining (optional). */
-      if (ctx_present_modes_cap > copy_count)
-         memset(&vk->context.present_modes[copy_count], 0,
-                (ctx_present_modes_cap - copy_count) * sizeof(vk->context.present_modes[0]));
+      RARCH_ERR("[Vulkan] Bogus present modes found.\n");
+      return false;
    }
+   vkGetPhysicalDeviceSurfacePresentModesKHR(
+         vk->context.gpu, vk->vk_surface,
+         &present_mode_count, present_modes);
 
    vk->context.swap_interval = swap_interval;
 
-   for (i = 0; i < present_mode_count; i++)
-      vk->context.present_modes[i] = present_modes[i];
+   /* Minimal-change: copy only what fits in context array. */
+   {
+      uint32_t copy_count = present_mode_count;
+      if (copy_count > ctx_present_modes_cap)
+         copy_count = ctx_present_modes_cap;
+      for (i = 0; i < copy_count; i++)
+         vk->context.present_modes[i] = present_modes[i];
+      /* optional zeroing of any tail omitted to keep changes minimal */
+   }
 
    /* Prefer IMMEDIATE without vsync */
    for (i = 0; i < present_mode_count; i++)
@@ -2074,20 +2076,17 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    }
 
    /* If still in FIFO with no swap interval, try MAILBOX */
-   if (!swap_interval && swapchain_present_mode == VK_PRESENT_MODE_FIFO_KHR)
-   {
    for (i = 0; i < present_mode_count; i++)
+   {
+      if (     !swap_interval
+            && swapchain_present_mode == VK_PRESENT_MODE_FIFO_KHR
+            && present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
       {
-         if (     !swap_interval
-               && swapchain_present_mode == VK_PRESENT_MODE_FIFO_KHR
-               && present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
-         {
-            swapchain_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-            break;
-         }
+         swapchain_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+         break;
       }
    }
-  
+
    /* Present mode logging */
    if (vk->swapchain == VK_NULL_HANDLE)
    {
@@ -2133,25 +2132,10 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       }
    }
 
-   /* Surface formats (bounded). */
-   {
-      VkResult r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu, vk->vk_surface,
-                     &format_count, NULL);
-      if (r != VK_SUCCESS || format_count == 0)
-      {
-         RARCH_ERR("[Vulkan] Failed to query surface formats: %d\n", r);
-         return false;
-      }
-      if (format_count > (uint32_t)(sizeof(formats)/sizeof(formats[0])))
-         format_count = (uint32_t)(sizeof(formats)/sizeof(formats[0]));
-      r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu, vk->vk_surface,
-                     &format_count, formats);
-      if (r != VK_SUCCESS)
-      {
-         RARCH_ERR("[Vulkan] Failed to get surface formats: %d\n", r);
-         return false;
-      }
-   }
+   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
+         vk->vk_surface, &format_count, NULL);
+   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
+         vk->vk_surface, &format_count, formats);
 
    format.format = VK_FORMAT_UNDEFINED;
    if (     format_count == 1
@@ -2254,9 +2238,9 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       vk->swapchain                    = VK_NULL_HANDLE;
       vk->context.swapchain_width      = width;
       vk->context.swapchain_height     = height;
-      vk->context.num_swapchain_images = 1;
-
+      vk->context.num_swapchain_images = 0;
       memset(vk->context.swapchain_images, 0, sizeof(vk->context.swapchain_images));
+      vk->context.flags               &= ~VK_CTX_FLAG_HAS_ACQUIRED_SWAPCHAIN;
       RARCH_DBG("[Vulkan] Cannot create a swapchain yet. Will try again later...\n");
       return true;
    }
@@ -2267,11 +2251,9 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
     * for GPU-rendered cores. */
    desired_swapchain_images    = settings->uints.video_max_swapchain_images;
 
-   /* We don't clamp the number of images requested to what is reported
-    * as supported by the implementation in surface_properties.minImageCount,
-    * because MESA always reports a minImageCount of 4, but 3 and 2 work
-    * perfectly well, even if it's out of spec. */
-
+   /* Ensure desired image count respects min/max. */
+   if (desired_swapchain_images < surface_properties.minImageCount)
+      desired_swapchain_images = surface_properties.minImageCount;
    if (     (surface_properties.maxImageCount > 0)
          && (desired_swapchain_images > surface_properties.maxImageCount))
       desired_swapchain_images = surface_properties.maxImageCount;
@@ -2303,10 +2285,15 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    info.imageExtent.width      = swapchain_size.width;
    info.imageExtent.height     = swapchain_size.height;
    info.imageArrayLayers       = 1;
-   info.imageUsage             =  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-                                | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+   /* Minimal change: validate usage bits against supportedUsageFlags, but keep essential bit. */
+   info.imageUsage             =  (  (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                                    | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                    | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                    | VK_IMAGE_USAGE_SAMPLED_BIT)
+                                  &   surface_properties.supportedUsageFlags)
+                                | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
    info.imageSharingMode       = VK_SHARING_MODE_EXCLUSIVE;
    info.queueFamilyIndexCount  = 0;
    info.pQueueFamilyIndices    = NULL;
@@ -2316,7 +2303,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    info.clipped                = VK_TRUE;
    info.oldSwapchain           = old_swapchain;
 
-   /* Only destroy old swapchain before creation on non-Android. */
+   /* Only destroy old swapchain after creating new one on Android. */
 #ifndef ANDROID
    info.oldSwapchain = VK_NULL_HANDLE;
    if (old_swapchain != VK_NULL_HANDLE)
@@ -2330,7 +2317,6 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       return false;
    }
 
-   /* On Android, now that creation succeeded, destroy the old swapchain. */
 #ifdef ANDROID
    if (old_swapchain != VK_NULL_HANDLE)
       vkDestroySwapchainKHR(vk->context.device, old_swapchain, NULL);
@@ -2367,13 +2353,20 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
 
       default:
          vk->context.swapchain_format  = format.format;
+         /* leave flags unchanged to keep diff minimal */
          break;
    }
 
-   vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
-         &vk->context.num_swapchain_images, NULL);
-   vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
-         &vk->context.num_swapchain_images, vk->context.swapchain_images);
+   /* Minimal-change: get image count first, clamp to capacity, then fetch. */
+   {
+      uint32_t count = 0;
+      vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain, &count, NULL);
+      if (count > ctx_swap_images_cap)
+         count = ctx_swap_images_cap;
+      vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
+            &count, vk->context.swapchain_images);
+      vk->context.num_swapchain_images = count;
+   }
 
    if (old_swapchain == VK_NULL_HANDLE)
       RARCH_LOG("[Vulkan] Got %u swapchain images.\n",
