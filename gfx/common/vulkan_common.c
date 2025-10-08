@@ -2107,10 +2107,23 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
       }
    }
 
-   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
-         vk->vk_surface, &format_count, NULL);
-   vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
-         vk->vk_surface, &format_count, formats);
+   {
+      VkResult r;
+      r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
+            vk->vk_surface, &format_count, NULL);
+      if (r != VK_SUCCESS || format_count == 0)
+      {
+         RARCH_ERR("[Vulkan] Surface has no formats (r=%d, count=%u).\n", r, format_count);
+         return false;
+      }
+      r = vkGetPhysicalDeviceSurfaceFormatsKHR(vk->context.gpu,
+            vk->vk_surface, &format_count, formats);
+      if (r != VK_SUCCESS)
+      {
+         RARCH_ERR("[Vulkan] Failed to get surface formats: %d\n", r);
+         return false;
+      }
+   }
 
    format.format = VK_FORMAT_UNDEFINED;
    if (     format_count == 1
