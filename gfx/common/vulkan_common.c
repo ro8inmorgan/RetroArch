@@ -1933,22 +1933,16 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    bool vsync                              = settings->bools.video_vsync;
    bool adaptive_vsync                     = settings->bools.video_adaptive_vsync;
 
+   const uint32_t ctx_present_modes_cap =
+      (uint32_t)(sizeof(vk->context.present_modes) / sizeof(vk->context.present_modes[0]));
+   const uint32_t ctx_swap_images_cap =
+      (uint32_t)(sizeof(vk->context.swapchain_images) / sizeof(vk->context.swapchain_images[0]));
+
    format.format                           = VK_FORMAT_UNDEFINED;
    format.colorSpace                       = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
    vkDeviceWaitIdle(vk->context.device);
    vulkan_acquire_clear_fences(vk);
-
-      /* Query surface capabilities. */
-   {
-      VkResult r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk->context.gpu,
-                        vk->vk_surface, &surface_properties);
-      if (r != VK_SUCCESS)
-      {
-         RARCH_ERR("[Vulkan] Failed to query surface capabilities: %d\n", r);
-         return false;
-      }
-   }
 
    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk->context.gpu,
          vk->vk_surface, &surface_properties);
@@ -2024,7 +2018,6 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    }
 
    vulkan_emulated_mailbox_deinit(&vk->mailbox);
-
    /* Present modes (bounded). */
    {
       VkResult r = vkGetPhysicalDeviceSurfacePresentModesKHR(
