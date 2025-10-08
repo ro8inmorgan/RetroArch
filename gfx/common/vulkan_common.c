@@ -1933,12 +1933,6 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    bool vsync                              = settings->bools.video_vsync;
    bool adaptive_vsync                     = settings->bools.video_adaptive_vsync;
 
-   /* Bounds for safe copies into context arrays (minimal change). */
-   const uint32_t ctx_present_modes_cap =
-      (uint32_t)(sizeof(vk->context.present_modes) / sizeof(vk->context.present_modes[0]));
-   const uint32_t ctx_swap_images_cap =
-      (uint32_t)(sizeof(vk->context.swapchain_images) / sizeof(vk->context.swapchain_images[0]));
-
    format.format                           = VK_FORMAT_UNDEFINED;
    format.colorSpace                       = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
@@ -2034,14 +2028,8 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
 
    vk->context.swap_interval = swap_interval;
 
-   /* copy only what fits in context array. */
-   {
-      uint32_t copy_count = present_mode_count;
-      if (copy_count > ctx_present_modes_cap)
-         copy_count = ctx_present_modes_cap;
-      for (i = 0; i < copy_count; i++)
-         vk->context.present_modes[i] = present_modes[i];
-   }
+   for (i = 0; i < present_mode_count; i++)
+      vk->context.present_modes[i] = present_modes[i];
 
    /* Prefer IMMEDIATE without vsync */
    for (i = 0; i < present_mode_count; i++)
@@ -2332,27 +2320,10 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
          break;
    }
 
-   /* Get image count first, clamp to capacity, then fetch. */
-   {
-      VkResult r;
-      uint32_t count = 0;
-      r = vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain, &count, NULL);
-      if (r != VK_SUCCESS || count == 0)
-      {
-         RARCH_ERR("[Vulkan] Failed to query swapchain images: %d (count=%u)\n", r, count);
-         return false;
-      }
-      if (count > ctx_swap_images_cap)
-         count = ctx_swap_images_cap;
-      r = vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
-            &count, vk->context.swapchain_images);
-      if (r != VK_SUCCESS)
-      {
-         RARCH_ERR("[Vulkan] Failed to get swapchain images: %d\n", r);
-         return false;
-      }
-      vk->context.num_swapchain_images = count;
-   }
+   vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
+         &vk->context.num_swapchain_images, NULL);
+   vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
+         &vk->context.num_swapchain_images, vk->context.swapchain_images);
 
    if (old_swapchain == VK_NULL_HANDLE)
       RARCH_LOG("[Vulkan] Got %u swapchain images.\n",
