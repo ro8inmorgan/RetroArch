@@ -1951,19 +1951,7 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
    /* Skip creation when window is minimized */
    if (   !surface_properties.currentExtent.width
        && !surface_properties.currentExtent.height)
-   {
-      /* tear down existing swapchain and report handled. */
-      if (vk->swapchain != VK_NULL_HANDLE)
-         vkDestroySwapchainKHR(vk->context.device, vk->swapchain, NULL);
-      vk->swapchain                    = VK_NULL_HANDLE;
-      vk->context.swapchain_width      = width;
-      vk->context.swapchain_height     = height;
-      vk->context.num_swapchain_images = 0;
-      memset(vk->context.swapchain_images, 0, sizeof(vk->context.swapchain_images));
-      vk->context.flags               &= ~VK_CTX_FLAG_HAS_ACQUIRED_SWAPCHAIN;
-      RARCH_DBG("[Vulkan] Window minimized; postponed swapchain creation.\n");
-      return true;
-   }
+      return false;
 
    if (     (swap_interval == 0)
          && (vk->flags & VK_DATA_FLAG_EMULATE_MAILBOX)
