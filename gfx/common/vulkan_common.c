@@ -2034,14 +2034,8 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
 
    vk->context.swap_interval = swap_interval;
 
-   /* copy only what fits in context array. */
-   {
-      uint32_t copy_count = present_mode_count;
-      if (copy_count > ctx_present_modes_cap)
-         copy_count = ctx_present_modes_cap;
-      for (i = 0; i < copy_count; i++)
-         vk->context.present_modes[i] = present_modes[i];
-   }
+   for (i = 0; i < present_mode_count; i++)
+      vk->context.present_modes[i] = present_modes[i];
 
    /* Prefer IMMEDIATE without vsync */
    for (i = 0; i < present_mode_count; i++)
@@ -2251,9 +2245,11 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
     * for GPU-rendered cores. */
    desired_swapchain_images    = settings->uints.video_max_swapchain_images;
 
-   /* Ensure desired image count respects min/max. */
-   if (desired_swapchain_images < surface_properties.minImageCount)
-      desired_swapchain_images = surface_properties.minImageCount;
+   /* We don't clamp the number of images requested to what is reported
+    * as supported by the implementation in surface_properties.minImageCount,
+    * because MESA always reports a minImageCount of 4, but 3 and 2 work
+    * perfectly well, even if it's out of spec. */
+
    if (     (surface_properties.maxImageCount > 0)
          && (desired_swapchain_images > surface_properties.maxImageCount))
       desired_swapchain_images = surface_properties.maxImageCount;
@@ -2361,27 +2357,10 @@ bool vulkan_create_swapchain(gfx_ctx_vulkan_data_t *vk,
          break;
    }
 
-   /* Get image count first, clamp to capacity, then fetch. */
-   {
-      VkResult r;
-      uint32_t count = 0;
-      r = vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain, &count, NULL);
-      if (r != VK_SUCCESS || count == 0)
-      {
-         RARCH_ERR("[Vulkan] Failed to query swapchain images: %d (count=%u)\n", r, count);
-         return false;
-      }
-      if (count > ctx_swap_images_cap)
-         count = ctx_swap_images_cap;
-      r = vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
-            &count, vk->context.swapchain_images);
-      if (r != VK_SUCCESS)
-      {
-         RARCH_ERR("[Vulkan] Failed to get swapchain images: %d\n", r);
-         return false;
-      }
-      vk->context.num_swapchain_images = count;
-   }
+   vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
+         &vk->context.num_swapchain_images, NULL);
+   vkGetSwapchainImagesKHR(vk->context.device, vk->swapchain,
+         &vk->context.num_swapchain_images, vk->context.swapchain_images);
 
    if (old_swapchain == VK_NULL_HANDLE)
       RARCH_LOG("[Vulkan] Got %u swapchain images.\n",
